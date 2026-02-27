@@ -30,9 +30,11 @@ for fp in file_paths:
 
 df = pd.concat(frames, ignore_index=True)
 
+economy_wide_df = pd.read_csv(BASE_DIR + "/Economy-wide_periodic_results.csv")
+
 numeric_cols = [
     "Industry ID", "Period",
-    "Total domestic production", "Imports", "Actual Exports",
+    "Total domestic production CVM", "Imports CVM", "Actual Exports CVM",
     "Total Sales", "Total Goods for Sale", "Employment"
 ]
 for c in numeric_cols:
@@ -44,31 +46,30 @@ for c in numeric_cols:
 # =========================================================
 
 MACRO_METRICS = {
-    "GDP (proxy: Σ Total domestic production)": "Total domestic production",
-    "Imports": "Imports",
-    "Exports (Actual)": "Actual Exports",
+    "Total domestic production (CP)": "Total domestic production CP",
+    "Total domestic production (CVM)": "Total domestic production CVM",
+    "Imports (CVM)": "Imports CVM",
+    "Exports (Actual CVM)": "Actual Exports CVM",
     "Total Sales": "Total Sales",
     "Total Goods for Sale": "Total Goods for Sale",
 }
-MACRO_SERIES_LABELS = {
-    "Total domestic production": "GDP (proxy)",
-    "Imports": "Imports",
-    "Actual Exports": "Exports (Actual)",
-    "Total Sales": "Total Sales",
-    "Total Goods for Sale": "Total Goods for Sale",
-}
-macro_options = [{"label": k, "value": v} for k, v in MACRO_METRICS.items()]
-macro_df = df.groupby("Period", as_index=False)[list(MACRO_METRICS.values())].sum()
 
-MICRO_METRICS = {
-    "Total domestic production": "Total domestic production",
-    "Imports": "Imports",
-    "Actual Exports": "Actual Exports",
+macro_df = df.groupby("Period", as_index=False)[list(MACRO_METRICS.values())].sum()
+macro_df['Observed domestic production CP'] = economy_wide_df['Observed domestic production CP']
+macro_df['Observed domestic production CVM'] = economy_wide_df['Observed domestic production CVM']
+MACRO_METRICS["Observed total domestic production (CP)"] = "Observed domestic production CP"
+MACRO_METRICS["Observed total domestic production (CVM)"] = "Observed domestic production CVM"
+macro_options = [{"label": k, "value": v} for k, v in MACRO_METRICS.items()]
+
+INDUST_METRICS = {
+    "Total domestic production (CVM)": "Total domestic production CVM",
+    "Imports (CVM)": "Imports CVM",
+    "Actual Exports (CVM)": "Actual Exports CVM",
     "Total Sales": "Total Sales",
     "Total Goods for Sale": "Total Goods for Sale",
 }
-micro_options = [{"label": k, "value": v} for k, v in MICRO_METRICS.items()]
-default_micro_metrics = list(MICRO_METRICS.values())
+indust_options = [{"label": k, "value": v} for k, v in INDUST_METRICS.items()]
+default_indust_metrics = list(INDUST_METRICS.values())
 
 industry_options = [
     {"label": str(int(i)), "value": int(i)}
@@ -76,7 +77,7 @@ industry_options = [
 ]
 default_industry = int(df["Industry ID"].dropna().astype(int).min())
 
-compare_metric_options = [{"label": k, "value": v} for k, v in MICRO_METRICS.items()]
+compare_metric_options = [{"label": k, "value": v} for k, v in INDUST_METRICS.items()]
 
 # =========================================================
 # 3. APP SETUP
@@ -288,7 +289,7 @@ def sidebar():
             html.Div(
                 [
                     nav_item("nav-macro", "/macro", "bi bi-graph-up", "MACRO"),
-                    nav_item("nav-micro", "/micro", "bi bi-building", "MICRO"),
+                    nav_item("nav-indust", "/indust", "bi bi-building", "INDUST"),
                     nav_item("nav-compare", "/compare", "bi bi-bar-chart-line", "COMPARISON"),
                 ],
                 className="sidebar-content"
@@ -332,7 +333,7 @@ macro_body = html.Div([
                 dcc.Dropdown(
                     id={"type": "metrics-dropdown", "page": "macro"},
                     options=macro_options,
-                    value=["Total domestic production", "Imports"],
+                    value=["Observed domestic production CVM", "Total domestic production CVM"],
                     multi=True,
                 )],
                 width = 8,
@@ -349,7 +350,7 @@ macro_body = html.Div([
 ])
 
 
-micro_body = html.Div([
+indust_body = html.Div([
     CenteredSection([
         html.H2("Microeconomic Time Series"),
 
@@ -360,7 +361,7 @@ micro_body = html.Div([
                     [
                         html.Label("Industry"),
                         dcc.Dropdown(
-                            id={"type": "industry-dropdown", "page": "micro"},
+                            id={"type": "industry-dropdown", "page": "indust"},
                             options=industry_options,
                             value=default_industry,
                             clearable=False,
@@ -373,9 +374,9 @@ micro_body = html.Div([
                     [
                         html.Label("Indicators"),
                         dcc.Dropdown(
-                            id={"type": "metrics-dropdown", "page": "micro"},
-                            options=micro_options,
-                            value=default_micro_metrics,
+                            id={"type": "metrics-dropdown", "page": "indust"},
+                            options=indust_options,
+                            value=default_indust_metrics,
                             multi=True,
                         ),
                     ],
@@ -389,17 +390,17 @@ micro_body = html.Div([
 
         # ---- Graph ----
         dcc.Graph(
-            id={"type": "ts-graph", "page": "micro"},
+            id={"type": "ts-graph", "page": "indust"},
             style={"width": "100%", "height": "360px"}
         ),
 
         # ---- Download Button ----
         html.Button(
             "Download CSV",
-            id={"type": "download-btn", "page": "micro"},
+            id={"type": "download-btn", "page": "indust"},
             className="btn btn-outline-primary mt-2"
         ),
-        dcc.Download(id={"type": "download", "page": "micro"})
+        dcc.Download(id={"type": "download", "page": "indust"})
     ])
 ])
 
@@ -418,7 +419,7 @@ compare_body = html.Div([
                         dcc.Dropdown(
                             id={"type": "metrics-dropdown", "page": "compare"},
                             options=compare_metric_options,
-                            value="Total domestic production",
+                            value="Total domestic production CVM",
                             clearable=False,
                         ),
                     ],
@@ -494,8 +495,8 @@ app.layout = dbc.Container([
 
 @app.callback(Output("page-content", "children"), Input("url", "pathname"))
 def router(path):
-    if path and path.rstrip("/").endswith("/micro"):
-        return micro_body
+    if path and path.rstrip("/").endswith("/indust"):
+        return indust_body
     if path and path.rstrip("/").endswith("/compare"):
         return compare_body
     return macro_body
@@ -503,7 +504,7 @@ def router(path):
 # Highlight active nav item
 @app.callback(
     Output("nav-macro", "className"),
-    Output("nav-micro", "className"),
+    Output("nav-indust", "className"),
     Output("nav-compare", "className"),
     Input("url", "pathname"),
 )
@@ -513,7 +514,7 @@ def highlight_nav(pathname):
         return "nav-item active" if active else "nav-item"
     return (
         cls(path.endswith("/macro") or path in ["", "/"]),
-        cls(path.endswith("/micro")),
+        cls(path.endswith("/indust")),
         cls(path.endswith("/compare")),
     )
 
@@ -542,7 +543,7 @@ def toggle_theme(is_dark):
         Input("theme-store", "data"),
     ]
 )
-def draw_timeseries(metrics_selected, micro_ind, compare_ind, pathname, theme):
+def draw_timeseries(metrics_selected, indust_ind, compare_ind, pathname, theme):
 
     template = "plotly_dark" if theme == "dark" else "plotly_white"
     template = "minty_dark" if theme == "dark" else "minty"
@@ -559,17 +560,17 @@ def draw_timeseries(metrics_selected, micro_ind, compare_ind, pathname, theme):
             if col in macro_df.columns:
                 fig.add_trace(go.Scatter(
                     x=macro_df["Period"], y=macro_df[col],
-                    mode="lines+markers", name=f"{MACRO_SERIES_LABELS.get(col, col)} (£bn)"
+                    mode="lines+markers", name=f"{col} (£bn)"
                 ))
         fig.update_layout(title="Macroeconomic Indicators Over Time", xaxis_title="Period")
         return format_currency_axis(fig, template, theme)
 
     # ----- Micro -----
-    if path.endswith("/micro"):
+    if path.endswith("/indust"):
         metrics = metrics_selected or []
         if isinstance(metrics, str):
             metrics = [metrics]
-        industry = micro_ind[0] if (micro_ind and micro_ind[0]) else default_industry
+        industry = indust_ind[0] if (indust_ind and indust_ind[0]) else default_industry
 
         dff = df[df["Industry ID"] == industry].sort_values("Period")
         fig = go.Figure()
@@ -628,20 +629,20 @@ def download_macro(n, metrics):
     return dcc.send_data_frame(macro_df[cols].to_csv, "macro.csv", index=False)
 
 @app.callback(
-    Output({"type": "download", "page": "micro"}, "data"),
-    Input({"type": "download-btn", "page": "micro"}, "n_clicks"),
+    Output({"type": "download", "page": "indust"}, "data"),
+    Input({"type": "download-btn", "page": "indust"}, "n_clicks"),
     [
-        State({"type": "industry-dropdown", "page": "micro"}, "value"),
-        State({"type": "metrics-dropdown", "page": "micro"}, "value"),
+        State({"type": "industry-dropdown", "page": "indust"}, "value"),
+        State({"type": "metrics-dropdown", "page": "indust"}, "value"),
     ],
     prevent_initial_call=True
 )
-def download_micro(n, ind, metrics):
+def download_indust(n, ind, metrics):
     if isinstance(metrics, str):
         metrics = [metrics]
     dff = df[df["Industry ID"] == ind].sort_values("Period")
     cols = ["Period"] + metrics
-    return dcc.send_data_frame(dff[cols].to_csv, f"micro_{ind}.csv", index=False)
+    return dcc.send_data_frame(dff[cols].to_csv, f"indust_{ind}.csv", index=False)
 
 @app.callback(
     Output({"type": "download", "page": "compare"}, "data"),
